@@ -211,9 +211,9 @@ func (r *Runner) ParseFlag() *Runner {
 		r.ReportCacheHitRate = true
 		r.ReportTLBHitRate = true
 		r.ReportSIMDBusyTime = true
-		r.ReportDRAMTransactionCount = true
 		r.ReportRDMATransactionCount = true
-		r.ReportCPIStack = true
+		r.ReportDRAMTransactionCount = true
+		//r.ReportCPIStack = true
 	}
 
 	return r
@@ -746,14 +746,17 @@ func (r *Runner) reportInstCount() {
 		r.metricsCollector.Collect(
 			t.cu.Name(), "cu_inst_count", float64(t.tracer.count))
 
+		//r.metricsCollector.Collect(
+		//	t.cu.Name(), "cu_CPI", numCycle/float64(t.tracer.count))
 		r.metricsCollector.Collect(
-			t.cu.Name(), "cu_CPI", numCycle/float64(t.tracer.count))
-
+			t.cu.Name(), "cu_IPC", float64(t.tracer.count)/numCycle)
 		r.metricsCollector.Collect(
 			t.cu.Name(), "simd_inst_count", float64(t.tracer.simdCount))
 
+		//r.metricsCollector.Collect(
+		//	t.cu.Name(), "simd_CPI", numCycle/float64(t.tracer.simdCount))
 		r.metricsCollector.Collect(
-			t.cu.Name(), "simd_CPI", numCycle/float64(t.tracer.simdCount))
+			t.cu.Name(), "simd_IPC", float64(t.tracer.simdCount)/numCycle)
 	}
 }
 
@@ -824,22 +827,29 @@ func (r *Runner) reportCacheHitRate() {
 		totalTransaction := readHit + readMiss + readMSHRHit +
 			writeHit + writeMiss + writeMSHRHit
 
-		if totalTransaction == 0 {
-			continue
-		}
+		if totalTransaction != 0 {
 
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "read-hit", float64(readHit))
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "read-miss", float64(readMiss))
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "read-mshr-hit", float64(readMSHRHit))
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "write-hit", float64(writeHit))
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "write-miss", float64(writeMiss))
-		r.metricsCollector.Collect(
-			tracer.cache.Name(), "write-mshr-hit", float64(writeMSHRHit))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "total hit", float64(readHit+writeHit))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "total-hit-ratio", float64(readHit+writeMSHRHit)/float64(totalTransaction))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "total miss", float64(readMiss+writeMiss))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "total-miss-ratio", float64(readMiss+writeMiss)/float64(totalTransaction))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "read-hit", float64(readHit))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "read-miss", float64(readMiss))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "read-mshr-hit", float64(readMSHRHit))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "write-hit", float64(writeHit))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "write-miss", float64(writeMiss))
+			r.metricsCollector.Collect(
+				tracer.cache.Name(), "write-mshr-hit", float64(writeMSHRHit))
+		}
 	}
 }
 
@@ -851,16 +861,21 @@ func (r *Runner) reportTLBHitRate() {
 
 		totalTransaction := hit + miss + mshrHit
 
-		if totalTransaction == 0 {
-			continue
-		}
+		if totalTransaction != 0 {
 
-		r.metricsCollector.Collect(
-			tracer.tlb.Name(), "hit", float64(hit))
-		r.metricsCollector.Collect(
-			tracer.tlb.Name(), "miss", float64(miss))
-		r.metricsCollector.Collect(
-			tracer.tlb.Name(), "mshr-hit", float64(mshrHit))
+			r.metricsCollector.Collect("Total TLB(hit/miss/mshrHit)", "Transactions", float64(totalTransaction))
+			r.metricsCollector.Collect(
+				tracer.tlb.Name(), "hit", float64(hit))
+			r.metricsCollector.Collect(
+				tracer.tlb.Name(), "hit-ratio", float64(hit)/float64(totalTransaction))
+			r.metricsCollector.Collect(
+				tracer.tlb.Name(), "miss", float64(miss))
+			r.metricsCollector.Collect(tracer.tlb.Name(), "miss-ratio", float64(miss)/float64(totalTransaction))
+			r.metricsCollector.Collect(
+				tracer.tlb.Name(), "mshr-hit", float64(mshrHit))
+			r.metricsCollector.Collect(
+				tracer.tlb.Name(), "mshrHit-ratio", float64(mshrHit)/float64(totalTransaction))
+		}
 	}
 }
 
@@ -868,19 +883,35 @@ func (r *Runner) reportRDMATransactionCount() {
 	for _, t := range r.rdmaTransactionCounters {
 		r.metricsCollector.Collect(
 			t.rdmaEngine.Name(),
+			"RDMAtotal_trans_count",
+			float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+		r.metricsCollector.Collect(
+			t.rdmaEngine.Name(),
 			"outgoing_trans_count",
 			float64(t.outgoingTracer.TotalCount()),
 		)
 		r.metricsCollector.Collect(
 			t.rdmaEngine.Name(),
+			"outgoing_trans_ratio",
+			float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+		r.metricsCollector.Collect(
+			t.rdmaEngine.Name(),
 			"incoming_trans_count",
 			float64(t.incomingTracer.TotalCount()),
 		)
+		r.metricsCollector.Collect(
+			t.rdmaEngine.Name(),
+			"ingoing_trans_ratio",
+			float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
 	}
 }
 
 func (r *Runner) reportDRAMTransactionCount() {
 	for _, t := range r.dramTracers {
+		r.metricsCollector.Collect(
+			"+++++DRAM TRANSACTION+++++",
+			"+++++++++++++++++++++++++++",
+			0)
 		r.metricsCollector.Collect(
 			t.dram.Name(),
 			"read_trans_count",
