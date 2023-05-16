@@ -49,6 +49,7 @@ var rdmaTransactionCountReportFlag = flag.Bool("report-rdma-transaction-count",
 	false, "Report the number of transactions going through the RDMA engines.")
 var dramTransactionCountReportFlag = flag.Bool("report-dram-transaction-count",
 	false, "Report the number of transactions accessing the DRAMs.")
+var pmcReportFlag = flag.Bool("pmc", false, "Report the PMC transactions")
 var gpuFlag = flag.String("gpus", "",
 	"The GPUs to use, use a format like 1,2,3,4. By default, GPU 1 is used.")
 var unifiedGPUFlag = flag.String("unified-gpus", "",
@@ -102,7 +103,16 @@ type dramTransactionCountTracer struct {
 	tracer *dramTracer
 	dram   TraceableComponent
 }
-
+type pmcLatencyTracer struct {
+	tracer *pmcTracer
+	pmc    TraceableComponent
+}
+type pmcTransactionTracer struct {
+	tracer         *pmcTransactionTracer
+	pmc            TraceableComponent
+	outgoingTracer *tracing.AverageTimeTracer
+	incomingTracer *tracing.AverageTimeTracer
+}
 type rdmaTransactionCountTracer struct {
 	outgoingTracer *tracing.AverageTimeTracer
 	incomingTracer *tracing.AverageTimeTracer
@@ -131,6 +141,8 @@ type Runner struct {
 	tlbHitRateTracers       []tlbHitRateTracer
 	rdmaTransactionCounters []rdmaTransactionCountTracer
 	dramTracers             []dramTransactionCountTracer
+	pmcTransactionTracers   []pmcTransactionTracer
+	pmcLatencyTracers       []pmcLatencyTracer
 	benchmarks              []benchmarks.Benchmark
 	monitor                 *monitoring.Monitor
 	metricsCollector        *collector
@@ -149,6 +161,8 @@ type Runner struct {
 	UseUnifiedMemory           bool
 	ReportSIMDBusyTime         bool
 	ReportCPIStack             bool
+	ReportPMClatency           bool
+	ReportPMCTracer            bool
 
 	GPUIDs []int
 }
@@ -192,7 +206,10 @@ func (r *Runner) ParseFlag() *Runner {
 	if *dramTransactionCountReportFlag {
 		r.ReportDRAMTransactionCount = true
 	}
-
+	if *pmcReportFlag {
+		r.ReportPMClatency = true
+		r.ReportPMCTracer = true
+	}
 	if *rdmaTransactionCountReportFlag {
 		r.ReportRDMATransactionCount = true
 	}
@@ -213,6 +230,8 @@ func (r *Runner) ParseFlag() *Runner {
 		r.ReportSIMDBusyTime = true
 		r.ReportRDMATransactionCount = true
 		r.ReportDRAMTransactionCount = true
+		r.ReportPMCTracer = true
+		r.ReportPMClatency = true
 		//r.ReportCPIStack = true
 	}
 
@@ -609,7 +628,72 @@ func (r *Runner) addDRAMTracer() {
 		}
 	}
 }
+func (r *Runner) addPMCLatencyTracer() {
+	if !r.ReportPMClatency {
+		return
+	}
 
+	for _, gpu := range r.platform.GPUs {
+		for _, pmc := range gpu.MemControllers {
+			t := pmcLatencyTracer{}
+			t.pmc = pmc.(TraceableComponent)
+			t.tracer = newpmcTracer()
+
+			tracing.CollectTrace(t.pmc, t.tracer)
+
+			r.pmcLatencyTracers = append(r.pmcLatencyTracers, t)
+		}
+	}
+}
+func (r *Runner) addPMCTransactionTracer() {
+	if !r.ReportPMCTracer {
+		return
+	}
+
+	for _, gpu := range r.platform.GPUs {
+		if gpu.PMC == nil {
+			continue
+		}
+
+		t := pmcTransactionTracer{}
+		t.pmc = gpu.PMC
+		t.incomingTracer = tracing.NewAverageTimeTracer(
+			r.platform.Engine,
+			func(task tracing.Task) bool {
+				if task.Kind != "req_in" {
+					return false
+				}
+
+				isFromOutside := strings.Contains(
+					task.Detail.(sim.Msg).Meta().Src.Name(), "PMC")
+				if !isFromOutside {
+					return false
+				}
+
+				return true
+			})
+		t.outgoingTracer = tracing.NewAverageTimeTracer(
+			r.platform.Engine,
+			func(task tracing.Task) bool {
+				if task.Kind != "req_in" {
+					return false
+				}
+
+				isFromOutside := strings.Contains(
+					task.Detail.(sim.Msg).Meta().Src.Name(), "PMC")
+				if isFromOutside {
+					return false
+				}
+
+				return true
+			})
+
+		tracing.CollectTrace(t.pmc, t.incomingTracer)
+		tracing.CollectTrace(t.pmc, t.outgoingTracer)
+
+		r.pmcTransactionTracers = append(r.pmcTransactionTracers, t)
+	}
+}
 func (r *Runner) addSIMDBusyTimeTracer() {
 	if !r.ReportSIMDBusyTime {
 		return
@@ -734,11 +818,15 @@ func (r *Runner) reportStats() {
 	r.reportTLBHitRate()
 	r.reportRDMATransactionCount()
 	r.reportDRAMTransactionCount()
+	r.reportPMCTracer()
+	r.reportPMClatency()
 	r.dumpMetrics()
 }
 
 func (r *Runner) reportInstCount() {
 	kernelTime := float64(r.kernelTimeCounter.BusyTime())
+	totalTracerCount := uint64(0)
+	totalCuIpc := float64(0)
 	for _, t := range r.instCountTracers {
 		cuFreq := float64(t.cu.(*cu.ComputeUnit).Freq)
 		numCycle := kernelTime * cuFreq
@@ -748,16 +836,19 @@ func (r *Runner) reportInstCount() {
 
 		//r.metricsCollector.Collect(
 		//	t.cu.Name(), "cu_CPI", numCycle/float64(t.tracer.count))
+		transIPC := float64(t.tracer.count) / numCycle
 		r.metricsCollector.Collect(
-			t.cu.Name(), "cu_IPC", float64(t.tracer.count)/numCycle)
+			t.cu.Name(), "cu_IPC", transIPC)
+		totalTracerCount += t.tracer.count
+		totalCuIpc += transIPC
 		r.metricsCollector.Collect(
 			t.cu.Name(), "simd_inst_count", float64(t.tracer.simdCount))
-
 		//r.metricsCollector.Collect(
 		//	t.cu.Name(), "simd_CPI", numCycle/float64(t.tracer.simdCount))
 		r.metricsCollector.Collect(
 			t.cu.Name(), "simd_IPC", float64(t.tracer.simdCount)/numCycle)
 	}
+	r.metricsCollector.Collect("CU", "total_CU_IPC", float64(totalCuIpc)/64)
 }
 
 func (r *Runner) reportCPIStack() {
@@ -855,6 +946,7 @@ func (r *Runner) reportCacheHitRate() {
 
 func (r *Runner) reportTLBHitRate() {
 	for _, tracer := range r.tlbHitRateTracers {
+
 		hit := tracer.tracer.GetStepCount("hit")
 		miss := tracer.tracer.GetStepCount("miss")
 		mshrHit := tracer.tracer.GetStepCount("mshr-hit")
@@ -905,13 +997,34 @@ func (r *Runner) reportRDMATransactionCount() {
 			float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
 	}
 }
-
+func (r *Runner) reportPMCTracer() {
+	for _, t := range r.pmcTransactionTracers {
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"PMCtotal_trans_count",
+			float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"outgoing_trans_count",
+			float64(t.outgoingTracer.TotalCount()),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"outgoing_trans_ratio",
+			float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"incoming_trans_count",
+			float64(t.incomingTracer.TotalCount()),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"ingoing_trans_ratio",
+			float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+	}
+}
 func (r *Runner) reportDRAMTransactionCount() {
 	for _, t := range r.dramTracers {
-		r.metricsCollector.Collect(
-			"+++++DRAM TRANSACTION+++++",
-			"+++++++++++++++++++++++++++",
-			0)
 		r.metricsCollector.Collect(
 			t.dram.Name(),
 			"read_trans_count",
@@ -944,7 +1057,40 @@ func (r *Runner) reportDRAMTransactionCount() {
 		)
 	}
 }
-
+func (r *Runner) reportPMClatency() {
+	for _, t := range r.pmcLatencyTracers {
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"read_trans_count",
+			float64(t.tracer.readCount),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"write_trans_count",
+			float64(t.tracer.writeCount),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"read_avg_latency",
+			float64(t.tracer.readAvgLatency),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"write_avg_latency",
+			float64(t.tracer.writeAvgLatency),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"read_size",
+			float64(t.tracer.readSize),
+		)
+		r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"write_size",
+			float64(t.tracer.writeSize),
+		)
+	}
+}
 func (r *Runner) dumpMetrics() {
 	r.metricsCollector.Dump(*filenameFlag)
 }

@@ -339,8 +339,8 @@ func (b *shaderArrayBuilder) buildL1VTLBs(sa *shaderArray) {
 	for i := 0; i < b.numCU; i++ {
 		name := fmt.Sprintf("%s.L1VTLB[%d]", b.name, i)
 		tlb := builder.Build(name)
+		//fmt.Sprintf(tlb)
 		sa.l1vTLBs = append(sa.l1vTLBs, tlb)
-
 		if b.visTracer != nil {
 			tracing.CollectTrace(tlb, b.visTracer)
 		}

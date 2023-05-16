@@ -313,7 +313,7 @@ func (b R9NanoPlatformBuilder) createMMU(
 	mmuBuilder := mmu.MakeBuilder().
 		WithEngine(engine).
 		WithFreq(1 * sim.GHz).
-		WithPageWalkingLatency(100).
+		WithPageWalkingLatency(500).
 		WithLog2PageSize(b.log2PageSize).
 		WithPageTable(pageTable)
 

@@ -770,7 +770,7 @@ func (b *R9NanoGPUBuilder) buildPageMigrationController() {
 			b.lowModuleFinderForPMC,
 			nil)
 	b.gpu.PMC = b.pageMigrationController
-
+	tracing.CollectTrace(b.pageMigrationController, b.visTracer)
 	if b.monitor != nil {
 		b.monitor.RegisterComponent(b.pageMigrationController)
 	}
