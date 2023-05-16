@@ -82,7 +82,7 @@ func (u *LDSUnit) runExecStage(now sim.VTimeInSec) bool {
 	if u.toWrite == nil {
 		u.alu.SetLDS(u.toExec.WG.LDS)
 		u.alu.Run(u.toExec)
-
+		
 		u.toWrite = u.toExec
 		u.toExec = nil
 		return true
