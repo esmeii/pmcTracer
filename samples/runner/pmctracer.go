@@ -52,7 +52,6 @@ func (t *pmcTracer) EndTask(task tracing.Task) {
 	}
 
 	taskTime := task.EndTime - originalTask.StartTime
-
 	switch originalTask.What {
 	case "*mem.ReadReq":
 		t.readAvgLatency = sim.VTimeInSec(

@@ -231,6 +231,7 @@ func (b R9NanoGPUBuilder) Build(name string, id uint64) *GPU {
 	b.buildSAs()
 	b.buildL2Caches()
 	b.buildDRAMControllers()
+	b.buildPageMigrationController()
 	b.buildCP()
 	b.buildL2TLB()
 
@@ -771,6 +772,7 @@ func (b *R9NanoGPUBuilder) buildPageMigrationController() {
 			nil)
 	b.gpu.PMC = b.pageMigrationController
 	tracing.CollectTrace(b.pageMigrationController, b.visTracer)
+	tracing.CollectTrace(b.pageMigrationController, b.memTracer)
 	if b.monitor != nil {
 		b.monitor.RegisterComponent(b.pageMigrationController)
 	}
