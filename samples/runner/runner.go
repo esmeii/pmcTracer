@@ -621,7 +621,7 @@ func (r *Runner) addRDMAEngineTracer() {
 	}
 }
 func (r *Runner) addPMCTransactionTracer() {
-	if !r.ReportRDMATransactionCount {
+	if !r.ReportPMCTransactionCount {
 		return
 	}
 
@@ -947,28 +947,30 @@ func (r *Runner) reportTLBHitRate() {
 
 func (r *Runner) reportRDMATransactionCount() {
 	for _, t := range r.rdmaTransactionCounters {
-		r.metricsCollector.Collect(
-			t.rdmaEngine.Name(),
-			"RDMAtotal_trans_count",
-			float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
-		r.metricsCollector.Collect(
-			t.rdmaEngine.Name(),
-			"outgoing_trans_count",
-			float64(t.outgoingTracer.TotalCount()),
-		)
-		r.metricsCollector.Collect(
-			t.rdmaEngine.Name(),
-			"outgoing_trans_ratio",
-			float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
-		r.metricsCollector.Collect(
-			t.rdmaEngine.Name(),
-			"incoming_trans_count",
-			float64(t.incomingTracer.TotalCount()),
-		)
-		r.metricsCollector.Collect(
-			t.rdmaEngine.Name(),
-			"ingoing_trans_ratio",
-			float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+		if t.outgoingTracer.TotalCount() != 0 && t.incomingTracer.TotalCount() != 0 {
+			r.metricsCollector.Collect(
+				t.rdmaEngine.Name(),
+				"total_trans_count",
+				float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+			r.metricsCollector.Collect(
+				t.rdmaEngine.Name(),
+				"outgoing_trans_count",
+				float64(t.outgoingTracer.TotalCount()),
+			)
+			r.metricsCollector.Collect(
+				t.rdmaEngine.Name(),
+				"outgoing_trans_ratio",
+				float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+			r.metricsCollector.Collect(
+				t.rdmaEngine.Name(),
+				"incoming_trans_count",
+				float64(t.incomingTracer.TotalCount()),
+			)
+			r.metricsCollector.Collect(
+				t.rdmaEngine.Name(),
+				"ingoing_trans_ratio",
+				float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+		}
 	}
 }
 
@@ -984,22 +986,21 @@ func (r *Runner) reportPMCTransactionCount() {
 				"outgoing_trans_count",
 				float64(t.outgoingTracer.TotalCount()),
 			)
-			/*r.metricsCollector.Collect(
-			t.pmc.Name(),
-			"outgoing_trans_ratio",
-			float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
-			*/
+			r.metricsCollector.Collect(
+				t.pmc.Name(),
+				"outgoing_trans_ratio",
+				float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
 			r.metricsCollector.Collect(
 				t.pmc.Name(),
 				"incoming_trans_count",
 				float64(t.incomingTracer.TotalCount()),
 			)
-			/*
-				r.metricsCollector.Collect(
-					t.pmc.Name(),
-					"ingoing_trans_ratio",
-					float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
-			*/
+
+			r.metricsCollector.Collect(
+				t.pmc.Name(),
+				"ingoing_trans_ratio",
+				float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+
 		}
 	}
 }
