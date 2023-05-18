@@ -79,8 +79,6 @@ func (e *PageMigrationController) processFromOutside(
 	switch req := req.(type) {
 	case *DataPullReq:
 		return e.handleDataPullReq(now, req)
-	case *DataPullRsp:
-		return e.handleDataPullRsp(now, req)
 	default:
 		log.Panicf("cannot process request of type %s", reflect.TypeOf(req))
 		return false
@@ -450,7 +448,7 @@ func (e *PageMigrationController) SetFreq(freq sim.Freq) {
 	panic("not implemented")
 }
 
-// NewPageMigrationController returns a new controller
+// NewPageMigrationController returns a new controllers
 func NewPageMigrationController(
 	name string,
 	engine sim.Engine,

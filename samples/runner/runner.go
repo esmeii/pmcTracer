@@ -640,7 +640,7 @@ func (r *Runner) addPMCTransactionTracer() {
 				}
 
 				isFromOutside := strings.Contains(
-					task.Detail.(sim.Msg).Meta().Src.Name(), "RDMA")
+					task.Detail.(sim.Msg).Meta().Src.Name(), "PMC")
 				if !isFromOutside {
 					return false
 				}
@@ -655,7 +655,7 @@ func (r *Runner) addPMCTransactionTracer() {
 				}
 
 				isFromOutside := strings.Contains(
-					task.Detail.(sim.Msg).Meta().Src.Name(), "RDMA")
+					task.Detail.(sim.Msg).Meta().Src.Name(), "PMC")
 				if isFromOutside {
 					return false
 				}
@@ -984,19 +984,22 @@ func (r *Runner) reportPMCTransactionCount() {
 				"outgoing_trans_count",
 				float64(t.outgoingTracer.TotalCount()),
 			)
-			r.metricsCollector.Collect(
-				t.pmc.Name(),
-				"outgoing_trans_ratio",
-				float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+			/*r.metricsCollector.Collect(
+			t.pmc.Name(),
+			"outgoing_trans_ratio",
+			float64(t.outgoingTracer.TotalCount())/float64(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount()))
+			*/
 			r.metricsCollector.Collect(
 				t.pmc.Name(),
 				"incoming_trans_count",
 				float64(t.incomingTracer.TotalCount()),
 			)
-			r.metricsCollector.Collect(
-				t.pmc.Name(),
-				"ingoing_trans_ratio",
-				float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+			/*
+				r.metricsCollector.Collect(
+					t.pmc.Name(),
+					"ingoing_trans_ratio",
+					float64(t.incomingTracer.TotalCount()/(t.outgoingTracer.TotalCount()+t.incomingTracer.TotalCount())))
+			*/
 		}
 	}
 }
