@@ -28,15 +28,16 @@ type GPU struct {
 	CommandProcessor *cp.CommandProcessor
 	RDMAEngine       *rdma.Engine
 	PMC              *pagemigrationcontroller.PageMigrationController
-	CUs              []TraceableComponent
-	SIMDs            []TraceableComponent
-	L1VCaches        []TraceableComponent
-	L1SCaches        []TraceableComponent
-	L1ICaches        []TraceableComponent
-	L2Caches         []TraceableComponent
-	L1VTLBs          []TraceableComponent
-	L1STLBs          []TraceableComponent
-	L1ITLBs          []TraceableComponent
-	L2TLBs           []TraceableComponent
-	MemControllers   []TraceableComponent
+	//PMC            []TraceableComponent
+	CUs            []TraceableComponent
+	SIMDs          []TraceableComponent
+	L1VCaches      []TraceableComponent
+	L1SCaches      []TraceableComponent
+	L1ICaches      []TraceableComponent
+	L2Caches       []TraceableComponent
+	L1VTLBs        []TraceableComponent
+	L1STLBs        []TraceableComponent
+	L1ITLBs        []TraceableComponent
+	L2TLBs         []TraceableComponent
+	MemControllers []TraceableComponent
 }

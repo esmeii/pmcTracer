@@ -772,12 +772,6 @@ func (b *R9NanoGPUBuilder) buildPageMigrationController() {
 			nil)
 	b.gpu.PMC = b.pageMigrationController
 
-	if b.enableVisTracing {
-		tracing.CollectTrace(b.pageMigrationController, b.visTracer)
-	}
-	if b.enableMemTracing {
-		tracing.CollectTrace(b.pageMigrationController, b.memTracer)
-	}
 	if b.monitor != nil {
 		b.monitor.RegisterComponent(b.pageMigrationController)
 	}
@@ -827,7 +821,7 @@ func (b *R9NanoGPUBuilder) buildL2TLB() {
 		WithEngine(b.engine).
 		WithFreq(b.freq).
 		WithNumWays(numWays).
-		WithNumSets(int(b.dramSize / (1 << b.log2PageSize) / uint64(numWays))).
+		WithNumSets(int(b.dramSize / (1 << b.log2PageSize) / uint64(numWays))). //65536
 		WithNumMSHREntry(64).
 		WithNumReqPerCycle(1024).
 		WithPageSize(1 << b.log2PageSize).

@@ -333,7 +333,7 @@ func (b *shaderArrayBuilder) buildL1VTLBs(sa *shaderArray) {
 		WithFreq(b.freq).
 		WithNumMSHREntry(4).
 		WithNumSets(1).
-		WithNumWays(1024). //64
+		WithNumWays(64). //64
 		WithNumReqPerCycle(4)
 
 	for i := 0; i < b.numCU; i++ {
